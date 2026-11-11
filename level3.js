@@ -29,6 +29,12 @@ function initLevel3() {
 
     gameChar_x = 100;
     gameChar_y = floorPos_y;
+    gameChar_vy = 0;
+
+    // Shared physics (sketch.js): Kobo can land on the podium top (drawn at x 875-965)
+    levelPlatforms = [{ x: 875, y: floorPos_y - 85, w: 90 }];
+    levelPits = [];
+    worldWidth = width;
 
     level3Platforms = [
         { x: 0, width: 240 },

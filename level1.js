@@ -1,260 +1,484 @@
-
-
 // ==========================================
-// LEVEL 1: ACT 1 - PLATFORMS, LIGHTNING & STORMS
+// LEVEL 1 — THE STORM (level1.js)
+// Collect 10 Cilus, avoid ponds and lightning,
+// then reach Zeta's umbrella to clear the sky.
+// Needs: sketch.js (updateGameChar, levelPlatforms, levelPits, worldWidth),
+//        character.js (drawCharacter), zeta.js (drawZetaNPC)
 // ==========================================
 
-let mascots = [];
-let movingClouds = [];
-let lightningStrikes = [];
-let platforms = [];
-let canyons = [];
+const L1 = {};
 
-let itemsCollected = 0;
-const totalItems = 10;
-let lives = 3;
+const L1_WORLD_W = 3200;      // level is wider than the screen; camera follows Kobo
+const L1_START_X = 120;
+const L1_GOAL_X = 3000;       // umbrella pole
+const L1_ZETA_X = 3070;
+const L1_TOTAL_CILUS = 10;
+const L1_MAX_LIVES = 3;
+const L1_KOBO_HALF_W = 16;    // Kobo's hitbox: tweak to match drawCharacter()
+const L1_KOBO_H = 70;
 
-let umbrellaItem = { x: 880, y: 0, width: 50, height: 40, active: false };
-let umbrellaOpened = false;
-let cloudSplitX = 0; // Moves storm clouds apart when umbrella opens
+const L1_SKY_STORM = [85, 85, 92];
+const L1_SKY_CLEAR = [51, 183, 255];
 
+// ------------------------------------------
+// SETUP
+// ------------------------------------------
 function initLevel1() {
-    itemsCollected = 0;
-    lives = 3;
-    umbrellaOpened = false;
-    cloudSplitX = 0;
-    mascots = [];
-    movingClouds = [];
-    lightningStrikes = [];
+    L1.lives = L1_MAX_LIVES;
+    L1.cilus = 0;
+    L1.phase = "PLAY";        // PLAY | CLEARING | DONE | GAMEOVER
+    L1.clearT = 0;
+    L1.camX = 0;
+    L1.hurtFlash = 0;
+    L1.flashT = 0;
+    L1.skyBlend = 0;          // 0 = storm grey, 1 = clear blue
+    L1.umbrellaOpen = 0;      // 0 = closed, 1 = open
+    L1.rainOn = true;
+    L1.sunX = width / 2;
 
-    // Define Ground Platforms & Canyons (Ponds) matching storyboard layout
-    platforms = [
-        { x: 0, width: 220 },
-        { x: 280, width: 200 },
-        { x: 540, width: 200 },
-        { x: 790, width: 234 }
+    // Ponds: fall in and lose a life
+    L1.pits = [
+        { x: 520, w: 200 },
+        { x: 1150, w: 240 },
+        { x: 1900, w: 210 },
+        { x: 2500, w: 200 }
     ];
 
-    canyons = [
-        { x: 220, width: 60 },
-        { x: 480, width: 60 },
-        { x: 740, width: 50 }
+    // Platforms (y = top surface). Floor is at floorPos_y (432).
+    L1.platforms = [
+        { x: 290,  y: 340, w: 130 },
+        { x: 560,  y: 330, w: 130 },
+        { x: 800,  y: 255, w: 130 },
+        { x: 1010, y: 175, w: 130 },
+        { x: 1200, y: 320, w: 150 },
+        { x: 1460, y: 250, w: 130 },
+        { x: 1700, y: 330, w: 130 },
+        { x: 1940, y: 320, w: 140 },
+        { x: 2160, y: 230, w: 130 },
+        { x: 2350, y: 155, w: 130 },
+        { x: 2530, y: 320, w: 140 }
     ];
 
-    // Umbrella Target on Final Platform right side
-    umbrellaItem.x = 880;
-    umbrellaItem.y = floorPos_y;
-    umbrellaItem.active = false;
+    // 10 Cilus: one on the ground near the start, nine on platforms
+    L1.tokens = [{ x: 200, y: floorPos_y - 25, got: false }];
+    for (const i of [0, 2, 3, 4, 5, 6, 8, 9, 10]) {
+        const p = L1.platforms[i];
+        L1.tokens.push({ x: p.x + p.w / 2, y: p.y - 25, got: false });
+    }
 
-    // Spawn 10 Cilus Mascots on platforms
-    for (let i = 0; i < totalItems; i++) {
-        mascots.push({
-            x: 60 + i * 85,
-            y: floorPos_y - 35 - (i % 2) * 50,
-            collected: false
+    L1.trees = [150, 900, 1600, 2300, 2820];
+
+    // Dark storm clouds in a dense band across the top (screen space)
+    L1.clouds = [];
+    const count = 22;
+    const span = width + 300;
+    for (let i = 0; i < count; i++) {
+        L1.clouds.push({
+            x: -150 + (i / count) * span + random(-15, 15),
+            y: random(0, 55),
+            w: random(150, 230),
+            h: random(90, 130),
+            dir: 1
         });
     }
 
-    // Initialize Moving Storm Clouds (Bigger, lower to cover sun fully)
-    for (let i = 0; i < 5; i++) {
-        movingClouds.push({
-            pos_x: i * 250 - 50,
-            pos_y: 90,
-            w: 320,
-            h: 140,
-            speed: 1.2
-        });
-    }
+    L1.drops = [];
+    for (let i = 0; i < 220; i++) L1.drops.push(l1_newDrop(true));
+
+    // Hand the level's layout to the shared physics in sketch.js
+    levelPlatforms = L1.platforms;
+    levelPits = L1.pits;
+    worldWidth = L1_WORLD_W;
+
+    l1_respawn();
+    L1.invuln = 0;
 }
 
+// ------------------------------------------
+// MAIN LOOP
+// ------------------------------------------
 function drawLevel1() {
-    // 1. Dynamic Background Sky (Stormy grey-blue vs Clear bright sky)
-    let stormSky = color(45, 50, 60);
-    let clearSky = color(50, 150, 255); // Matches storyboard blue shade[cite: 57]
-    let skyProgress = umbrellaOpened ? 1.0 : (itemsCollected / totalItems) * 0.2;
-    background(lerpColor(stormSky, clearSky, skyProgress));
+    if (!L1.platforms) initLevel1();
 
-    // 2. Small Bright Yellow Sun (Hidden behind clouds until umbrella opens)[cite: 52]
-    push(); 
-    noStroke();
-    let sunAlpha = umbrellaOpened ? 255 : 0; // Fully hidden behind clouds until cleared
-    fill(255, 230, 0, sunAlpha); 
-    ellipse(width / 2, 95, 70, 70); 
-    pop();
+    if (L1.phase === "PLAY") {
+        updateGameChar();
+        l1_collectCilus();
+        l1_updateLightning();
+        l1_checkDeath();
+        l1_checkGoal();
+    } else if (L1.phase === "CLEARING") {
+        l1_updateClearing();
+    }
+    if (L1.invuln > 0) L1.invuln--;
 
-    // 3. Background Trees & Ponds (Canyons) & Platforms
-    noStroke();
-    // Background Trees on platforms[cite: 49]
-    for (let p of platforms) {
-        fill(139, 69, 19);
-        rect(p.x + p.width / 2 - 14, floorPos_y - 140, 28, 140);
-        fill(34, 139, 34);
-        ellipse(p.x + p.width / 2, floorPos_y - 140, 120, 120);
-    }
-    // Blue water ponds in canyons (Kobo dies if she falls into them)[cite: 49]
-    for (let c of canyons) {
-        fill(25, 90, 220);
-        rect(c.x, floorPos_y, c.width, height - floorPos_y);
-    }
-    // Green ground platforms
-    fill(0, 210, 0);
-    for (let p of platforms) {
-        rect(p.x, floorPos_y, p.width, height - floorPos_y);
-    }
+    l1_updateClouds();
+    L1.camX = constrain(gameChar_x - width * 0.4, 0, L1_WORLD_W - width);
 
-    // Check Canyon Pits / Falling Hazard
-    let isOnPlatform = false;
-    for (let p of platforms) {
-        if (gameChar_x >= p.x && gameChar_x <= p.x + p.width) {
-            isOnPlatform = true;
-            break;
-        }
-    }
+    // ---- Sky (screen space): sun first so the clouds hide it ----
+    background(lerpColor(color(...L1_SKY_STORM), color(...L1_SKY_CLEAR), L1.skyBlend));
+    l1_drawSun();
+    l1_drawClouds();
 
-    if (!isOnPlatform && gameChar_y >= floorPos_y) {
-        lives--;
-        gameChar_x = 50; // Respawn at original spot[cite: 51]
-        gameChar_y = floorPos_y;
-    }
-
-    // 4. Render Cilus Mascot Tokens[cite: 53]
-    for (let m of mascots) {
-        if (!m.collected) {
-            drawBocorMascot(m.x, m.y);
-            if (dist(gameChar_x, gameChar_y - 40, m.x, m.y) < 35) {
-                m.collected = true;
-                itemsCollected++;
-                if (itemsCollected >= totalItems) {
-                    umbrellaItem.active = true;
-                }
-            }
-        }
-    }
-
-    // 5. Umbrella & Zeta NPC at final platform[cite: 49]
+    // ---- World (scrolls with the camera) ----
     push();
-    translate(umbrellaItem.x, umbrellaItem.y);
-    if (!umbrellaOpened) {
-        // Closed umbrella (Blue vertical shape matching storyboard)[cite: 49]
-        fill(0, 100, 255);
-        noStroke();
-        rect(-6, -65, 12, 55, 6);
-        stroke(220);
-        strokeWeight(3);
-        line(0, -65, 0, 0);
-    } else {
-        // Opened umbrella canopy[cite: 57]
-        fill(0, 120, 255);
-        noStroke();
-        arc(0, -55, 75, 55, PI, TWO_PI);
-        stroke(220);
-        strokeWeight(3);
-        line(0, -55, 0, 0);
+    translate(-L1.camX, 0);
+    for (const tx of L1.trees) l1_drawTree(tx);
+    l1_drawGround();
+    l1_drawPlatforms();
+    for (const t of L1.tokens) {
+        if (!t.got) l1_drawCilus(t.x, t.y + sin(frameCount * 0.06 + t.x) * 4);
     }
+    l1_drawUmbrella();
+    if (typeof drawZetaNPC === 'function') {
+        push(); drawZetaNPC(L1_ZETA_X, floorPos_y); pop();
+    }
+    if (L1.invuln === 0 || frameCount % 8 < 4) {
+        push(); drawCharacter(); pop();
+    }
+    l1_drawPonds();       // drawn after Kobo so she sinks into the water
+    l1_drawLightning();
+    l1_drawZetaHint();
     pop();
 
-    // Render Zeta NPC standing right next to the umbrella[cite: 49]
-    drawZetaNPC(umbrellaItem.x + 35, floorPos_y);
+    l1_drawRain();
 
-    // 6. Render Player Character (Kobo)
-    updateGameChar();
-    drawCharacter();
-
-    // Check Umbrella Reach Condition[cite: 55]
-    if (umbrellaItem.active && !umbrellaOpened) {
-        if (dist(gameChar_x, gameChar_y - 40, umbrellaItem.x, floorPos_y) < 45) {
-            umbrellaOpened = true;
-        }
-    }
-
-    // 7. Moving Storm Clouds & Cloud Rain (Using your exact drawRain function)[cite: 44, 49]
-    if (umbrellaOpened) cloudSplitX += 6; // Clouds shift away when umbrella opens[cite: 57]
-
-    push();
+    // ---- Screen overlays ----
     noStroke();
-    fill(35, 40, 50, 250);
-    for (let c of movingClouds) {
-        let drawX = c.pos_x + (c.pos_x < width / 2 ? -cloudSplitX : cloudSplitX);
-        ellipse(drawX, c.pos_y, c.w, c.h);
+    if (L1.flashT > 0) { fill(255, L1.flashT * 18); rect(0, 0, width, height); L1.flashT--; }
+    if (L1.hurtFlash > 0) { fill(255, 0, 0, L1.hurtFlash * 5); rect(0, 0, width, height); L1.hurtFlash--; }
 
-        // Draw Rain from Cloud using exact requested helper function[cite: 44]
-        if (!umbrellaOpened) {
-            drawRain(c);
-        }
+    l1_drawHUD();
+    l1_drawBanner();
+}
 
-        // Move clouds continuously in one direction[cite: 49]
-        if (!umbrellaOpened) {
-            c.pos_x += c.speed;
-            if (c.pos_x > width + 200) {
-                c.pos_x = -200;
-            }
-        }
+function level1KeyPressed() {
+    if (keyCode !== ENTER) return;
+    if (L1.phase === "GAMEOVER") initLevel1();
+    else if (L1.phase === "DONE") l1_goToLevel2();
+}
+
+// ------------------------------------------
+// GAME RULES
+// ------------------------------------------
+function l1_respawn() {
+    gameChar_x = L1_START_X;
+    gameChar_y = floorPos_y;
+    gameChar_vy = 0;
+    isFalling = false;
+    L1.invuln = 90;           // ~1.5s of blinking safety after respawn
+    L1.warnT = 0;
+    L1.boltT = 0;
+    L1.boltTimer = 120;
+    L1.boltX = 0;
+    L1.boltPts = [];
+}
+
+function l1_loseLife(force) {
+    if (L1.invuln > 0 && !force) return;
+    L1.lives--;
+    L1.hurtFlash = 20;
+    if (L1.lives <= 0) {
+        L1.lives = 0;
+        L1.phase = "GAMEOVER";
+        return;
     }
-    pop();
+    l1_respawn();             // Cilus already collected are kept
+}
 
-    // 8. Lightning Hazards[cite: 49]
-    if (!umbrellaOpened && frameCount % 100 === 0) {
-        lightningStrikes.push({
-            x: random(100, width - 100),
-            timer: 20
-        });
-    }
+function l1_checkDeath() {
+    if (gameChar_y > floorPos_y + 45) l1_loseLife(true);   // fell into a pond
+}
 
-    for (let i = lightningStrikes.length - 1; i >= 0; i--) {
-        let strike = lightningStrikes[i];
-        stroke(255, 230, 80, strike.timer * 12);
-        strokeWeight(3);
-        line(strike.x, 120, strike.x - 12, 210);
-        line(strike.x - 12, 210, strike.x + 10, 300);
-        line(strike.x + 10, 300, strike.x - 4, floorPos_y);
-
-        if (abs(gameChar_x - strike.x) < 25 && gameChar_y >= floorPos_y - 25) {
-            lives--;
-            gameChar_x = 50; 
-            gameChar_y = floorPos_y;
-        }
-
-        strike.timer--;
-        if (strike.timer <= 0) lightningStrikes.splice(i, 1);
-    }
-
-    // 9. HUD Overlay (Lives & Kobo Cilus count)[cite: 49]
-    fill(0, 160);
-    noStroke();
-    rect(20, 20, 250, 75, 6);
-
-    fill(255); textSize(16); textAlign(LEFT);
-    let hearts = "";
-    for (let l = 0; l < lives; l++) hearts += "❤️ ";
-    text("LIVES: " + lives + " / 3 " + hearts, 35, 45);
-    text("KOBO CILUS: " + itemsCollected + " / " + totalItems, 35, 75);
-
-    if (lives <= 0) {
-        lives = 3;
-        initLevel1();
-    }
-
-    // 10. Level Transition to Act 2 when cleared & sun shines[cite: 57]
-    if (umbrellaOpened && cloudSplitX > width / 2 + 100) {
-        fill(255, 240, 150); textSize(24); textAlign(CENTER);
-        text("The Skyline is Restored! Proceeding to Level 2...", width / 2, height / 2);
-
-        if (frameCount % 140 === 0) {
-            if (typeof initLevel2 === 'function') {
-                initLevel2();
-            }
-            gameState = "ACT2";
+function l1_collectCilus() {
+    for (const t of L1.tokens) {
+        if (t.got) continue;
+        const hitX = abs(gameChar_x - t.x) < L1_KOBO_HALF_W + 16;
+        const hitY = gameChar_y > t.y - 15 && gameChar_y - L1_KOBO_H < t.y + 15;
+        if (hitX && hitY) {
+            t.got = true;
+            L1.cilus++;
         }
     }
 }
 
-// Exact cloud rain helper function requested[cite: 44]
-function drawRain(cloud) {
-    stroke(255);
-    strokeWeight(2);
-    for (var i = 0; i < 15; i++) {
-        var dropX = random(cloud.pos_x - 50, cloud.pos_x + 50);
-        var dropY = random(cloud.pos_y, floorPos_y);
-        line(dropX, dropY, dropX, dropY + 10);
+function l1_checkGoal() {
+    if (L1.cilus >= L1_TOTAL_CILUS && gameChar_x > L1_GOAL_X - 80 && !isFalling) {
+        L1.phase = "CLEARING";
+        L1.clearT = 0;
+        L1.warnT = 0;
+        L1.boltT = 0;
+        isLeft = false;
+        isRight = false;
+        gameChar_x = L1_GOAL_X - 55;
+        for (const c of L1.clouds) c.dir = c.x < width / 2 ? -1 : 1;
     }
+}
+
+function l1_updateClearing() {
+    L1.clearT++;
+    const t = L1.clearT;
+    L1.umbrellaOpen = constrain(t / 40, 0, 1);       // Zeta opens the umbrella
+    if (t > 40) L1.rainOn = false;                   // rain stops
+    L1.skyBlend = constrain((t - 60) / 120, 0, 1);   // grey -> blue, sun revealed
+    if (t > 260) L1.phase = "DONE";
+}
+
+function l1_goToLevel2() {
+    levelPlatforms = [];
+    levelPits = [];
+    worldWidth = null;
+    gameChar_x = 100;
+    gameChar_y = floorPos_y;
+    gameChar_vy = 0;
+    if (typeof initLevel2 === 'function') initLevel2();
+    gameState = "ACT2";
+}
+
+// ------------------------------------------
+// LIGHTNING: warning flash, then a strike
+// ------------------------------------------
+function l1_updateLightning() {
+    if (L1.boltT > 0) {
+        L1.boltT--;
+        if (abs(gameChar_x - L1.boltX) < 30) l1_loseLife(false);
+        return;
+    }
+    if (L1.warnT > 0) {
+        L1.warnT--;
+        if (L1.warnT === 0) {
+            L1.boltT = 14;
+            L1.flashT = 8;
+            L1.boltPts = l1_makeBolt(L1.boltX);
+        }
+        return;
+    }
+    L1.boltTimer--;
+    if (L1.boltTimer <= 0) {
+        L1.boltX = constrain(gameChar_x + random(-220, 220), 60, L1_WORLD_W - 60);
+        L1.warnT = 50;                    // ~0.8s warning so it's dodgeable
+        L1.boltTimer = random(150, 260);
+    }
+}
+
+function l1_makeBolt(x) {
+    const pts = [[x, 100]];
+    let y = 100;
+    while (y < floorPos_y) {
+        y = min(y + random(35, 55), floorPos_y);
+        pts.push([x + random(-22, 22), y]);
+    }
+    return pts;
+}
+
+function l1_drawLightning() {
+    if (L1.warnT > 0 && frameCount % 10 < 6) {
+        noStroke();
+        fill(255, 220, 80, 70);
+        rect(L1.boltX - 30, 100, 60, floorPos_y - 100);
+    }
+    if (L1.boltT > 0) {
+        noFill();
+        stroke(255, 160, 0);
+        strokeWeight(7);
+        beginShape();
+        for (const p of L1.boltPts) vertex(p[0], p[1]);
+        endShape();
+        stroke(255, 245, 200);
+        strokeWeight(2);
+        beginShape();
+        for (const p of L1.boltPts) vertex(p[0], p[1]);
+        endShape();
+        noStroke();
+    }
+}
+
+// ------------------------------------------
+// SKY: sun, clouds, rain
+// ------------------------------------------
+function l1_drawSun() {
+    // The sun follows Kobo across the sky (hidden behind clouds until they part)
+    L1.sunX = lerp(L1.sunX, gameChar_x - L1.camX, 0.03);
+    push();
+    translate(L1.sunX, 60);
+    if (L1.skyBlend > 0.4) {
+        const a = map(L1.skyBlend, 0.4, 1, 0, 255);
+        stroke(255, 230, 0, a);
+        strokeWeight(6);
+        for (let i = 0; i < 8; i++) {
+            const ang = frameCount * 0.01 + i * TWO_PI / 8;
+            line(cos(ang) * 55, sin(ang) * 55, cos(ang) * 105, sin(ang) * 105);
+        }
+    }
+    noStroke();
+    fill(255, 230, 0);
+    ellipse(0, 0, 80);
+    pop();
+}
+
+function l1_updateClouds() {
+    for (const c of L1.clouds) {
+        if (L1.phase === "CLEARING" || L1.phase === "DONE") {
+            if (L1.clearT > 40) c.x += c.dir * min(9, (L1.clearT - 40) * 0.12);
+        } else {
+            c.x += 0.6;                                   // drift right forever
+            if (c.x > width + 150) c.x -= width + 300;    // wrap around
+        }
+    }
+}
+
+function l1_drawClouds() {
+    stroke(70);
+    strokeWeight(1);
+    fill(18, 18, 24);
+    for (const c of L1.clouds) {
+        ellipse(c.x, c.y, c.w, c.h);
+        ellipse(c.x - c.w * 0.3, c.y + c.h * 0.25, c.w * 0.6, c.h * 0.7);
+        ellipse(c.x + c.w * 0.3, c.y + c.h * 0.2, c.w * 0.65, c.h * 0.75);
+    }
+    noStroke();
+}
+
+function l1_newDrop(anywhere) {
+    return {
+        x: random(width),
+        y: anywhere ? random(-height, height) : random(-60, -10),
+        len: random(12, 22),
+        spd: random(9, 14),
+        dead: false
+    };
+}
+
+function l1_drawRain() {
+    stroke(255, 200);
+    strokeWeight(1.5);
+    for (const d of L1.drops) {
+        if (d.dead) continue;
+        d.y += d.spd;
+        if (d.y > height) {
+            if (L1.rainOn) Object.assign(d, l1_newDrop(false));
+            else { d.dead = true; continue; }
+        }
+        line(d.x, d.y, d.x - 1, d.y + d.len);
+    }
+    noStroke();
+}
+
+// ------------------------------------------
+// WORLD DRAWING
+// ------------------------------------------
+function l1_drawTree(x) {
+    noStroke();
+    fill(150, 20, 20);
+    rect(x - 12, floorPos_y - 280, 24, 280);
+    fill(60, 180, 60);
+    ellipse(x, floorPos_y - 300, 170, 230);
+}
+
+function l1_drawGround() {
+    noStroke();
+    fill(70, 200, 60);
+    rect(0, floorPos_y, L1_WORLD_W, height - floorPos_y);
+}
+
+function l1_drawPonds() {
+    noStroke();
+    fill(25, 85, 200);
+    for (const p of L1.pits) rect(p.x, floorPos_y, p.w, height - floorPos_y);
+}
+
+function l1_drawPlatforms() {
+    noStroke();
+    fill(0, 230, 230);
+    for (const p of L1.platforms) rect(p.x, p.y, p.w, 16);
+}
+
+function l1_drawUmbrella() {
+    const px = L1_GOAL_X;
+    const top = floorPos_y - 190;
+    stroke(240);
+    strokeWeight(6);
+    line(px, floorPos_y, px, top);
+    noStroke();
+    fill(20, 60, 220);
+    const o = L1.umbrellaOpen;
+    if (o < 0.05) {
+        ellipse(px, top + 70, 28, 120);    // closed
+    } else {
+        arc(px, top + 20, lerp(40, 220, o), lerp(160, 120, o), PI, TWO_PI, CHORD);
+    }
+}
+
+function l1_drawCilus(x, y) {
+    push();
+    translate(x, y);
+    noFill();
+    strokeWeight(3);
+    const ring = [[255, 90, 90], [255, 170, 60], [255, 230, 70], [90, 210, 110], [80, 170, 255], [170, 110, 255]];
+    for (let i = 0; i < ring.length; i++) {
+        stroke(...ring[i]);
+        ellipse(0, 8, 46 - i * 5, 14 - i * 1.6);
+    }
+    noStroke();
+    fill(255);
+    arc(0, 8, 30, 36, PI, TWO_PI, CHORD);
+    ellipse(-17, 6, 10, 6);
+    ellipse(17, 6, 10, 6);
+    stroke(80);
+    strokeWeight(1.5);
+    line(-7, -1, -3, -1);
+    line(3, -1, 7, -1);
+    noStroke();
+    fill(255, 160, 180, 160);
+    ellipse(-9, 3, 5, 3);
+    ellipse(9, 3, 5, 3);
+    pop();
+}
+
+function l1_drawZetaHint() {
+    if (L1.phase !== "PLAY") return;
+    if (abs(gameChar_x - L1_ZETA_X) < 300 && L1.cilus < L1_TOTAL_CILUS) {
+        noStroke();
+        fill(255);
+        textAlign(CENTER, BOTTOM);
+        textSize(15);
+        text(`Bring me all ${L1_TOTAL_CILUS} Cilus, Kobo! (${L1.cilus}/${L1_TOTAL_CILUS})`, L1_ZETA_X, floorPos_y - 210);
+    }
+}
+
+// ------------------------------------------
+// HUD + MESSAGES
+// ------------------------------------------
+function l1_drawHUD() {
+    push();
+    fill(0, 200);
+    stroke(255);
+    strokeWeight(3);
+    rect(20, 15, 280, 72);
+    noStroke();
+    fill(255);
+    textAlign(LEFT, TOP);
+    textSize(20);
+    text(`LIVES ${L1.lives}/${L1_MAX_LIVES}`, 35, 25);
+    text(`KOBO CILUS ${L1.cilus}/${L1_TOTAL_CILUS}`, 35, 52);
+    pop();
+}
+
+function l1_drawBanner() {
+    if (L1.phase === "DONE") l1_centerMsg("The storm has cleared!", "Press ENTER for Level 2");
+    else if (L1.phase === "GAMEOVER") l1_centerMsg("Out of lives!", "Press ENTER to try again");
+}
+
+function l1_centerMsg(title, sub) {
+    push();
+    noStroke();
+    fill(0, 170);
+    rect(width / 2 - 260, height / 2 - 60, 520, 120, 12);
+    fill(255);
+    textAlign(CENTER, CENTER);
+    textSize(30);
+    text(title, width / 2, height / 2 - 18);
+    textSize(18);
+    fill(255, 220, 0);
+    text(sub, width / 2, height / 2 + 25);
+    pop();
 }
