@@ -1,6 +1,3 @@
-
-
-
 // ==========================================
 // LEVEL 2 — THE HAZE (level2.js)
 // Collect 10 storm clouds, avoid ditches and fire,
@@ -9,9 +6,9 @@
 // Needs: sketch.js (updateGameChar, levelPlatforms, levelPits, worldWidth),
 //        character.js (drawCharacter), kaela.js (drawKaelaNPC)
 // ==========================================
- 
+
 const L2 = {};
- 
+
 const L2_WORLD_W = 3000;
 const L2_START_X = 100;
 const L2_ANVIL_X = 2800;
@@ -19,13 +16,13 @@ const L2_KAELA_X = 2890;
 const L2_TOTAL_STORMS = 10;
 const L2_MAX_LIVES = 3;
 const L2_KOBO_HALF_W = 16;    // Kobo's hitbox: keep in step with level1.js
-const L2_KOBO_H = 70;
+const L2_KOBO_H = 120;
 const L2_FIRE_MAX_H = 110;    // low enough to stand safely on a platform above it
 const L2_FIRE_CYCLE = 200;    // frames per fire cycle
- 
+
 const L2_SKY_HAZE = [228, 132, 24];
 const L2_SKY_STORM = [100, 100, 106];
- 
+
 // ------------------------------------------
 // SETUP
 // ------------------------------------------
@@ -44,7 +41,7 @@ function initLevel2() {
     L2.clangs = [];
     L2.rainOn = false;
     L2.sunX = width / 2;
- 
+
     // Ditches: fall in and lose a life
     L2.pits = [
         { x: 560,  w: 150 },
@@ -52,7 +49,7 @@ function initLevel2() {
         { x: 1900, w: 160 },
         { x: 2400, w: 150 }
     ];
- 
+
     // Floating platforms (y = top surface). Floor is at floorPos_y (432).
     L2.platforms = [
         { x: 300,  y: 340, w: 130 },
@@ -66,7 +63,7 @@ function initLevel2() {
         { x: 2150, y: 220, w: 130 },
         { x: 2400, y: 320, w: 150 }
     ];
- 
+
     // 10 storm-cloud tokens: two on the ground, eight on platforms
     L2.tokens = [
         { x: 180,  y: floorPos_y - 25, got: false },
@@ -76,18 +73,18 @@ function initLevel2() {
         const p = L2.platforms[i];
         L2.tokens.push({ x: p.x + p.w / 2, y: p.y - 25, got: false });
     }
- 
+
     // Fires spring up from the ground on a cycle, each out of step with the others
     L2.fires = [430, 980, 1600, 2250, 2650].map((x, i) => ({ x, offset: i * 47 }));
- 
+
     L2.trees = [200, 950, 1580, 2300];
- 
+
     // Big translucent haze clouds drifting left (screen space)
     L2.haze = [];
     for (let i = 0; i < 7; i++) {
         L2.haze.push({ x: i * 190, y: random(40, 200), d: random(220, 340), spd: random(0.3, 0.6) });
     }
- 
+
     // Black storm clouds that roll in from both sides at the end (screen space)
     L2.storm = [];
     for (let i = 0; i < 12; i++) {
@@ -101,24 +98,24 @@ function initLevel2() {
             h: random(100, 140)
         });
     }
- 
+
     L2.drops = [];
     for (let i = 0; i < 220; i++) L2.drops.push(l2_newDrop(true));
- 
+
     levelPlatforms = L2.platforms;
     levelPits = L2.pits;
     worldWidth = L2_WORLD_W;
- 
+
     l2_respawn();
     L2.invuln = 0;
 }
- 
+
 // ------------------------------------------
 // MAIN LOOP
 // ------------------------------------------
 function drawLevel2() {
     if (!L2.platforms) initLevel2();
- 
+
     if (L2.phase === "PLAY") {
         updateGameChar();
         l2_collectStorms();
@@ -132,15 +129,15 @@ function drawLevel2() {
         if (L2.doneT > 360) { l2_goToLevel3(); return; }   // auto-continue after ~6s
     }
     if (L2.invuln > 0) L2.invuln--;
- 
+
     L2.camX = constrain(gameChar_x - width * 0.4, 0, L2_WORLD_W - width);
- 
+
     // ---- Sky (screen space) ----
     background(lerpColor(color(...L2_SKY_HAZE), color(...L2_SKY_STORM), L2.skyBlend));
     l2_drawSun();
     l2_drawHaze();
     l2_drawStormClouds();
- 
+
     // ---- World (scrolls with the camera) ----
     push();
     translate(-L2.camX, 0);
@@ -162,29 +159,29 @@ function drawLevel2() {
     l2_drawForge();
     l2_drawKaelaHint();
     pop();
- 
+
     l2_drawRain();
- 
+
     // ---- Screen overlays ----
     noStroke();
     if (L2.hurtFlash > 0) { fill(255, 0, 0, L2.hurtFlash * 5); rect(0, 0, width, height); L2.hurtFlash--; }
- 
+
     l2_drawHUD();
     l2_drawBanner();
 }
- 
+
 // Enter / Space / click on the end screens. Returns true if it did something.
 function level2Continue() {
     if (L2.phase === "GAMEOVER") { initLevel2(); return true; }
     if (L2.phase === "DONE") { l2_goToLevel3(); return true; }
     return false;
 }
- 
+
 function level2KeyPressed() {
     if (keyCode === ENTER || keyCode === RETURN || keyCode === 32) return level2Continue();
     return false;
 }
- 
+
 // ------------------------------------------
 // GAME RULES
 // ------------------------------------------
@@ -195,7 +192,7 @@ function l2_respawn() {
     isFalling = false;
     L2.invuln = 90;
 }
- 
+
 function l2_loseLife(force) {
     if (L2.invuln > 0 && !force) return;
     L2.lives--;
@@ -207,11 +204,11 @@ function l2_loseLife(force) {
     }
     l2_respawn();             // storm clouds already collected are kept
 }
- 
+
 function l2_checkDeath() {
     if (gameChar_y > floorPos_y + 45) l2_loseLife(true);   // fell into a ditch
 }
- 
+
 function l2_collectStorms() {
     for (const t of L2.tokens) {
         if (t.got) continue;
@@ -223,7 +220,7 @@ function l2_collectStorms() {
         }
     }
 }
- 
+
 // Fire height for this frame: dormant -> flicker warning -> erupt -> die down
 function l2_fireHeight(f) {
     const c = (frameCount + f.offset) % L2_FIRE_CYCLE;
@@ -235,7 +232,7 @@ function l2_fireHeight(f) {
     else h = map(c, 175, L2_FIRE_CYCLE, L2_FIRE_MAX_H, 0);              // dying down
     return h * L2.fireScale;
 }
- 
+
 function l2_checkFire() {
     for (const f of L2.fires) {
         const h = l2_fireHeight(f);
@@ -246,7 +243,7 @@ function l2_checkFire() {
         }
     }
 }
- 
+
 function l2_checkGoal() {
     if (L2.storms >= L2_TOTAL_STORMS && gameChar_x > L2_ANVIL_X - 90 && !isFalling) {
         L2.phase = "FORGING";
@@ -256,7 +253,7 @@ function l2_checkGoal() {
         gameChar_x = L2_ANVIL_X - 70;
     }
 }
- 
+
 // The ending from the storyboard, on a timeline
 function l2_updateForging() {
     L2.t++;
@@ -268,7 +265,7 @@ function l2_updateForging() {
     }
     for (const c of L2.clangs) c.life--;
     L2.clangs = L2.clangs.filter(c => c.life > 0);
- 
+
     const roll = constrain((t - 170) / 130, 0, 1);               // storm rolls in
     L2.skyBlend = roll;
     L2.hazeAlpha = 1 - roll;
@@ -276,7 +273,7 @@ function l2_updateForging() {
     if (t > 250) L2.rainOn = true;
     if (t > 380) L2.phase = "DONE";
 }
- 
+
 function l2_goToLevel3() {
     levelPlatforms = [];
     levelPits = [];
@@ -284,7 +281,7 @@ function l2_goToLevel3() {
     if (typeof initLevel3 === 'function') initLevel3();
     gameState = "ACT3";
 }
- 
+
 // Short metallic "clang" made in the browser, no sound file needed
 function l2_clangSound() {
     try {
@@ -307,7 +304,7 @@ function l2_clangSound() {
         }
     } catch (e) { /* sound is optional */ }
 }
- 
+
 // ------------------------------------------
 // SKY
 // ------------------------------------------
@@ -318,7 +315,7 @@ function l2_drawSun() {
     fill(255, 235, 60);
     ellipse(L2.sunX, 70, 80);
 }
- 
+
 function l2_drawHaze() {
     if (L2.hazeAlpha <= 0) return;
     stroke(120, 70, 20, 90 * L2.hazeAlpha);
@@ -331,7 +328,7 @@ function l2_drawHaze() {
     }
     noStroke();
 }
- 
+
 function l2_drawStormClouds() {
     if (L2.phase !== "FORGING" && L2.phase !== "DONE") return;
     const roll = constrain((L2.t - 170) / 130, 0, 1);
@@ -347,7 +344,7 @@ function l2_drawStormClouds() {
     }
     noStroke();
 }
- 
+
 function l2_newDrop(anywhere) {
     return {
         x: random(width),
@@ -356,7 +353,7 @@ function l2_newDrop(anywhere) {
         spd: random(9, 14)
     };
 }
- 
+
 function l2_drawRain() {
     if (!L2.rainOn) return;
     stroke(255, 200);
@@ -368,7 +365,7 @@ function l2_drawRain() {
     }
     noStroke();
 }
- 
+
 // ------------------------------------------
 // WORLD DRAWING
 // ------------------------------------------
@@ -379,25 +376,25 @@ function l2_drawTree(x) {
     fill(55, 120, 35);
     ellipse(x, floorPos_y - 290, 190, 240);
 }
- 
+
 function l2_drawGround() {
     noStroke();
     fill(150, 0, 0);
     rect(0, floorPos_y, L2_WORLD_W, height - floorPos_y);
 }
- 
+
 function l2_drawDitches() {
     noStroke();
     fill(95, 45, 10);
     for (const p of L2.pits) rect(p.x, floorPos_y, p.w, height - floorPos_y);
 }
- 
+
 function l2_drawPlatforms() {
     noStroke();
     fill(38, 80, 25);
     for (const p of L2.platforms) rect(p.x, p.y, p.w, 18);
 }
- 
+
 function l2_drawFire(f) {
     const h = l2_fireHeight(f);
     if (h <= 1) return;
@@ -410,7 +407,7 @@ function l2_drawFire(f) {
     fill(255, 230, 80);
     triangle(f.x - 7, floorPos_y, f.x, floorPos_y - h * 0.3, f.x + 7, floorPos_y);
 }
- 
+
 function l2_drawStormToken(x, y, s) {
     push();
     translate(x, y);
@@ -424,7 +421,7 @@ function l2_drawStormToken(x, y, s) {
     ellipse(18, 1, 20, 16);
     pop();
 }
- 
+
 function l2_drawAnvil() {
     const x = L2_ANVIL_X;
     const y = floorPos_y;
@@ -435,7 +432,7 @@ function l2_drawAnvil() {
     rect(x - 55, y - 70, 105, 22);         // face
     triangle(x + 50, y - 70, x + 50, y - 48, x + 78, y - 70);              // horn
 }
- 
+
 function l2_drawForge() {
     if (L2.forgeCloud > 0) {
         // The 10 storm clouds become one big dark cloud over the anvil
@@ -459,7 +456,7 @@ function l2_drawForge() {
         text("CLANG!", L2_ANVIL_X + 40, floorPos_y - 200 - (30 - c.life));
     }
 }
- 
+
 function l2_drawKaelaHint() {
     if (L2.phase !== "PLAY") return;
     if (abs(gameChar_x - L2_KAELA_X) < 320 && L2.storms < L2_TOTAL_STORMS) {
@@ -470,7 +467,7 @@ function l2_drawKaelaHint() {
         text(`I need all ${L2_TOTAL_STORMS} storm clouds to forge with! (${L2.storms}/${L2_TOTAL_STORMS})`, L2_KAELA_X - 60, floorPos_y - 160);
     }
 }
- 
+
 // ------------------------------------------
 // HUD + MESSAGES
 // ------------------------------------------
@@ -488,14 +485,14 @@ function l2_drawHUD() {
     text(`KOBO STORMS ${L2.storms}/${L2_TOTAL_STORMS}`, 35, 52);
     pop();
 }
- 
+
 function l2_drawBanner() {
     if (L2.phase === "DONE") {
         const secs = max(1, ceil((360 - L2.doneT) / 60));
         l2_centerMsg("The haze is washed away!", `Press ENTER or click for Level 3 (auto in ${secs}s)`);
     } else if (L2.phase === "GAMEOVER") l2_centerMsg("Out of lives!", "Press ENTER or click to try again");
 }
- 
+
 function l2_centerMsg(title, sub) {
     push();
     noStroke();

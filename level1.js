@@ -15,7 +15,7 @@ const L1_ZETA_X = 3070;
 const L1_TOTAL_CILUS = 10;
 const L1_MAX_LIVES = 3;
 const L1_KOBO_HALF_W = 16;    // Kobo's hitbox: tweak to match drawCharacter()
-const L1_KOBO_H = 70;
+const L1_KOBO_H = 120;        // Kobo is drawn ~135px tall (character.js)
 
 const L1_SKY_STORM = [85, 85, 92];
 const L1_SKY_CLEAR = [51, 183, 255];
@@ -28,6 +28,7 @@ function initLevel1() {
     L1.cilus = 0;
     L1.phase = "PLAY";        // PLAY | CLEARING | DONE | GAMEOVER
     L1.clearT = 0;
+    L1.doneT = 0;
     L1.camX = 0;
     L1.hurtFlash = 0;
     L1.flashT = 0;
@@ -108,6 +109,9 @@ function drawLevel1() {
         l1_checkGoal();
     } else if (L1.phase === "CLEARING") {
         l1_updateClearing();
+    } else if (L1.phase === "DONE") {
+        L1.doneT++;
+        if (L1.doneT > 360) { l1_goToLevel2(); return; }   // auto-continue after ~6s
     }
     if (L1.invuln > 0) L1.invuln--;
 
@@ -151,10 +155,16 @@ function drawLevel1() {
     l1_drawBanner();
 }
 
+// Enter / Space / click on the end screens. Returns true if it did something.
+function level1Continue() {
+    if (L1.phase === "GAMEOVER") { initLevel1(); return true; }
+    if (L1.phase === "DONE") { l1_goToLevel2(); return true; }
+    return false;
+}
+
 function level1KeyPressed() {
-    if (keyCode !== ENTER) return;
-    if (L1.phase === "GAMEOVER") initLevel1();
-    else if (L1.phase === "DONE") l1_goToLevel2();
+    if (keyCode === ENTER || keyCode === RETURN || keyCode === 32) return level1Continue();
+    return false;
 }
 
 // ------------------------------------------
@@ -464,8 +474,10 @@ function l1_drawHUD() {
 }
 
 function l1_drawBanner() {
-    if (L1.phase === "DONE") l1_centerMsg("The storm has cleared!", "Press ENTER for Level 2");
-    else if (L1.phase === "GAMEOVER") l1_centerMsg("Out of lives!", "Press ENTER to try again");
+    if (L1.phase === "DONE") {
+        const secs = max(1, ceil((360 - L1.doneT) / 60));
+        l1_centerMsg("The storm has cleared!", `Press ENTER or click for Level 2 (auto in ${secs}s)`);
+    } else if (L1.phase === "GAMEOVER") l1_centerMsg("Out of lives!", "Press ENTER or click to try again");
 }
 
 function l1_centerMsg(title, sub) {
