@@ -5,7 +5,7 @@ function drawZetaNPC(overrideX, overrideY) {
     let currentY = overrideY !== undefined ? overrideY : zetaY; // Grounded Y position
 
     push();
-    translate(currentX, currentY);
+    translate(currentX, currentY + 6);   // +6 puts her shoes on the ground
     noStroke();
 
     // Palette

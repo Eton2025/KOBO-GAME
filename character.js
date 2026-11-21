@@ -3,7 +3,7 @@
 
 
 function drawCharacter() {
-    push(); translate(0, -20); noStroke();
+    push(); translate(0, -11); noStroke();   // -11 puts the standing shoes exactly on the ground
     
     // --- Kobo Palette ---
     let cyan = color(120, 210, 255);        // Kobo Hair / Water Cyan
@@ -127,18 +127,18 @@ function drawCharacter() {
         rect(gameChar_x - 1 - legOffset, gameChar_y - 55, 5, 22);
         
         fill(white); 
-        rect(gameChar_x - 8 + legOffset, gameChar_y - 42, 7, 22);
-        rect(gameChar_x - 2 - legOffset, gameChar_y - 42, 7, 22);
+        rect(gameChar_x - 8 + legOffset, gameChar_y - 42, 7, 39);
+        rect(gameChar_x - 2 - legOffset, gameChar_y - 42, 7, 39);
         fill(black);
         rect(gameChar_x - 8 + legOffset, gameChar_y - 42, 7, 3);
         rect(gameChar_x - 2 - legOffset, gameChar_y - 42, 7, 3);
 
         fill(white); 
-        rect(gameChar_x - 11 + legOffset, gameChar_y - 20, 12, 10, 2);
-        rect(gameChar_x - 5 - legOffset, gameChar_y - 20, 12, 10, 2);
+        rect(gameChar_x - 11 + legOffset, gameChar_y - 3, 12, 10, 2);
+        rect(gameChar_x - 5 - legOffset, gameChar_y - 3, 12, 10, 2);
         fill(redAccent); 
-        rect(gameChar_x - 13 + legOffset, gameChar_y - 12, 15, 6, 3);
-        rect(gameChar_x - 7 - legOffset, gameChar_y - 12, 15, 6, 3);
+        rect(gameChar_x - 13 + legOffset, gameChar_y + 5, 15, 6, 3);
+        rect(gameChar_x - 7 - legOffset, gameChar_y + 5, 15, 6, 3);
 
     // ==========================================
     // 4. WALKING RIGHT (PROFILE VIEW)
@@ -176,18 +176,18 @@ function drawCharacter() {
         rect(gameChar_x + 2 - legOffset, gameChar_y - 55, 5, 22);
         
         fill(white); 
-        rect(gameChar_x - 5 + legOffset, gameChar_y - 42, 7, 22);
-        rect(gameChar_x + 1 - legOffset, gameChar_y - 42, 7, 22);
+        rect(gameChar_x - 5 + legOffset, gameChar_y - 42, 7, 39);
+        rect(gameChar_x + 1 - legOffset, gameChar_y - 42, 7, 39);
         fill(black);
         rect(gameChar_x - 5 + legOffset, gameChar_y - 42, 7, 3);
         rect(gameChar_x + 1 - legOffset, gameChar_y - 42, 7, 3);
 
         fill(white); 
-        rect(gameChar_x - 6 + legOffset, gameChar_y - 20, 12, 10, 2);
-        rect(gameChar_x - 0 - legOffset, gameChar_y - 20, 12, 10, 2);
+        rect(gameChar_x - 6 + legOffset, gameChar_y - 3, 12, 10, 2);
+        rect(gameChar_x - 0 - legOffset, gameChar_y - 3, 12, 10, 2);
         fill(redAccent); 
-        rect(gameChar_x - 7 + legOffset, gameChar_y - 12, 15, 6, 3);
-        rect(gameChar_x + 1 - legOffset, gameChar_y - 12, 15, 6, 3);
+        rect(gameChar_x - 7 + legOffset, gameChar_y + 5, 15, 6, 3);
+        rect(gameChar_x + 1 - legOffset, gameChar_y + 5, 15, 6, 3);
 
     // ==========================================
     // 5. STANDING FRONT (IDLE)
